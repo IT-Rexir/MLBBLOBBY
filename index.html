@@ -238,26 +238,41 @@ function setName(){
 
 /* CREATE LOBBY (FIXED) */
 function createLobby(){
-  const name = document.getElementById("name").value.trim();
-  const desc = document.getElementById("desc").value.trim();
-  const lobbyId = document.getElementById("lobbyId").value.trim();
-  const rank = document.getElementById("rank").value;
-  const maxPlayers = document.getElementById("maxPlayers").value;
 
-  // 🔥 STOP EMPTY DATA
+  const nameEl = document.getElementById("name");
+  const descEl = document.getElementById("desc");
+  const idEl = document.getElementById("lobbyId");
+  const rankEl = document.getElementById("rank");
+  const maxEl = document.getElementById("maxPlayers");
+
+  const name = nameEl ? nameEl.value.trim() : "";
+  const desc = descEl ? descEl.value.trim() : "";
+  const lobbyId = idEl ? idEl.value.trim() : "";
+  const rank = rankEl ? rankEl.value : "";
+  const maxPlayers = maxEl ? maxEl.value : "";
+
+  // 🔥 DEBUG ALERT (IMPORTANT)
+  console.log("CREATE LOBBY:", { name, desc, lobbyId, rank, maxPlayers });
+
   if(!name || !lobbyId){
-    alert("❌ Please fill Lobby Name and Lobby ID");
+    alert("❌ Fill Lobby Name and Lobby ID first");
     return;
   }
 
   db.collection("lobbies").add({
-    name: name,
+    name,
     desc: desc || "No description",
-    lobbyId: lobbyId,
-    rank: rank,
-    maxPlayers: maxPlayers,
+    lobbyId,
+    rank,
+    maxPlayers,
     players: 1,
     createdAt: Date.now()
+  })
+  .then(()=>{
+    alert("✅ Lobby Created!");
+  })
+  .catch(err=>{
+    alert("❌ Error: " + err.message);
   });
 }
 
