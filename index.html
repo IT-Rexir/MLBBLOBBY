@@ -124,13 +124,8 @@ button{
   background:#141a2b;
 }
 
-.chat-input input{
-  flex:3;
-}
-
-.chat-input button{
-  flex:1;
-}
+.chat-input input{ flex:3; }
+.chat-input button{ flex:1; }
 
 .scan-btn{
   width:90%;
@@ -147,6 +142,8 @@ button{
  Lobby Finder
 <br>
 <small id="lobbyCount">Open Lobbies: 0</small>
+<br>
+<small id="onlineCount">Online Users: 0</small>
 </div>
 
 <div id="nameBox">
@@ -184,7 +181,6 @@ button{
 </select>
 
 <button onclick="createLobby()">Create Lobby</button>
-
 <button class="scan-btn" onclick="scanLobbies()">🔍 Scan Active Lobbies</button>
 
 <div id="lobbies"></div>
@@ -225,89 +221,95 @@ const db = firebase.firestore();
 
 let username = "";
 let currentLobby = "";
-let lobbyListener = null;
 
-/* USER */
+/* ================= ONLINE USERS ================= */
+function setOnline(user){
+  db.collection("presence").doc(user).set({
+    name: user,
+    lastActive: Date.now()
+  });
+}
+
+setInterval(()=>{
+  if(username){
+    setOnline(username);
+  }
+}, 10000);
+
+function loadOnline(){
+  db.collection("presence").onSnapshot(snap=>{
+    let count = 0;
+    const now = Date.now();
+
+    snap.forEach(d=>{
+      const u = d.data();
+      if(now - u.lastActive < 30000){
+        count++;
+      }
+    });
+
+    document.getElementById("onlineCount").innerText =
+      "Online Users: " + count;
+  });
+}
+loadOnline();
+
+/* ================= USERNAME ================= */
 function setName(){
   const val = document.getElementById("usernameInput").value;
   if(!val) return;
+
   username = val;
   document.getElementById("nameBox").style.display = "none";
+
+  setOnline(username);
 }
 
-/* CREATE LOBBY + 10 MIN EXPIRY */
+/* ================= CREATE LOBBY + 10 MIN EXPIRE ================= */
 function createLobby(){
-
-  const name = document.getElementById("name").value.trim();
-  const desc = document.getElementById("desc").value.trim();
-  const lobbyId = document.getElementById("lobbyId").value.trim();
-  const rank = document.getElementById("rank").value;
-  const maxPlayers = document.getElementById("maxPlayers").value;
-
-  if(!name || !lobbyId){
-    alert("Fill Lobby Name and ID");
-    return;
-  }
-
   const now = Date.now();
 
   db.collection("lobbies").add({
-    name,
-    desc: desc || "No description",
-    lobbyId,
-    rank,
-    maxPlayers,
+    name: document.getElementById("name").value,
+    desc: document.getElementById("desc").value || "No description",
+    lobbyId: document.getElementById("lobbyId").value || "No ID",
+    rank: document.getElementById("rank").value || "No Rank",
     players: 1,
+    maxPlayers: parseInt(document.getElementById("maxPlayers").value),
     createdAt: now,
-    expiresAt: now + 10 * 60 * 1000   // ✅ 10 MINUTES
+    expiresAt: now + 10 * 60 * 1000
   });
-
 }
 
-/* LOAD + FILTER EXPIRED */
+/* ================= LOAD LOBBIES + AUTO REMOVE EXPIRED ================= */
 function loadLobbies(){
-
-  if(lobbyListener){
-    lobbyListener();
-  }
-
-  lobbyListener = db.collection("lobbies")
-  .orderBy("createdAt","desc")
+  db.collection("lobbies")
   .onSnapshot(snap=>{
-
     const container = document.getElementById("lobbies");
     const now = Date.now();
 
     let html = "";
     let count = 0;
 
-    snap.forEach(doc=>{
-      const l = doc.data();
+    snap.forEach(d=>{
+      const l = d.data();
 
-      // ❌ HIDE EXPIRED
-      if(l.expiresAt && l.expiresAt < now) return;
+      if(l.expiresAt && now > l.expiresAt) return;
 
       count++;
 
       html += `
       <div class="lobby">
-
         <b>${l.name}</b><br>
-
-        <div style="margin:5px 0;font-size:12px;">
-          ${l.desc}
-        </div>
-
+        <div style="margin:5px 0;font-size:12px;">${l.desc}</div>
         <div class="rank">🏆 ${l.rank}</div><br>
-
         👥 ${l.maxPlayers}/${l.players}<br>
 
         <div class="id-box" onclick="copyID('${l.lobbyId}')">
           🆔 ${l.lobbyId}
         </div><br>
 
-        <button onclick="openChat('${doc.id}')">Chat</button>
-
+        <button onclick="openChat('${d.id}')">Chat</button>
       </div>`;
     });
 
@@ -317,7 +319,7 @@ function loadLobbies(){
   });
 }
 
-/* AUTO DELETE EXPIRED */
+/* AUTO DELETE EVERY 1 MIN */
 setInterval(()=>{
   const now = Date.now();
 
@@ -329,14 +331,10 @@ setInterval(()=>{
       doc.ref.delete();
     });
   });
+
 }, 60000);
 
-/* SCAN */
-function scanLobbies(){
-  loadLobbies();
-}
-
-/* CHAT */
+/* ================= CHAT ================= */
 function copyID(id){
   navigator.clipboard.writeText(id);
 }
@@ -352,10 +350,8 @@ function openChat(id){
 
     snap.forEach(m=>{
       const d = m.data();
-
       const time = new Date(d.time).toLocaleTimeString([],{
-        hour:"2-digit",
-        minute:"2-digit"
+        hour:"2-digit", minute:"2-digit"
       });
 
       html += `
