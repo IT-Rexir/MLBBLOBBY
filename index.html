@@ -220,15 +220,14 @@ let currentLobby = "";
 function setName(){
   const val = document.getElementById("usernameInput").value;
   if(!val) return;
-
   username = val;
   document.getElementById("nameBox").style.display = "none";
 }
 
-/* =========================
-   CREATE LOBBY (10 MIN EXPIRE)
-========================= */
+/* ===================== FIXED CREATE ===================== */
 function createLobby(){
+  const now = Date.now();
+
   db.collection("lobbies").add({
     name: document.getElementById("name").value,
     desc: document.getElementById("desc").value || "No description",
@@ -237,16 +236,13 @@ function createLobby(){
     players: 5,
     maxPlayers: parseInt(document.getElementById("maxPlayers").value),
 
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 10 * 60 * 1000 // ✅ 10 minutes
+    createdAt: now,
+    expiresAt: now + 10 * 60 * 1000
   });
 }
 
-/* =========================
-   RENDER LOBBIES (FIXED)
-========================= */
+/* ===================== FIXED RENDER ===================== */
 db.collection("lobbies")
-.orderBy("createdAt","desc")
 .onSnapshot(snap=>{
 
   const container = document.getElementById("lobbies");
@@ -257,9 +253,10 @@ db.collection("lobbies")
 
   snap.forEach(d=>{
     const l = d.data();
+    if(!l) return;
 
-    // skip expired
-    if(l.expiresAt && l.expiresAt < now) return;
+    // FIX: expiration safe
+    if(l.expiresAt && now > l.expiresAt) return;
 
     count++;
 
@@ -277,7 +274,7 @@ db.collection("lobbies")
       👥 ${l.maxPlayers}/${l.players}<br>
 
       <div class="id-box" onclick="copyID('${l.lobbyId}')">
-        🆔 ${l.lobbyId} (tap to copy)
+        🆔 ${l.lobbyId}
       </div><br>
 
       <button onclick="openChat('${d.id}')">Chat</button>
@@ -290,27 +287,20 @@ db.collection("lobbies")
     "Open Lobbies: " + count;
 });
 
-/* =========================
-   AUTO DELETE EXPIRED LOBBIES
-========================= */
-function cleanupLobbies(){
+/* ===================== CLEANUP ===================== */
+setInterval(() => {
   const now = Date.now();
 
   db.collection("lobbies")
   .where("expiresAt","<=",now)
   .get()
   .then(snap=>{
-    snap.forEach(doc=>{
-      doc.ref.delete();
-    });
+    snap.forEach(doc=>doc.ref.delete());
   });
-}
 
-setInterval(cleanupLobbies, 60000);
+}, 60000);
 
-/* =========================
-   CHAT SYSTEM (UNCHANGED)
-========================= */
+/* ===================== CHAT ===================== */
 function copyID(id){
   navigator.clipboard.writeText(id);
 }
@@ -326,9 +316,7 @@ function openChat(id){
 
     snap.forEach(m=>{
       const d = m.data();
-      const time = new Date(d.time).toLocaleTimeString([],{
-        hour:'2-digit',minute:'2-digit'
-      });
+      const time = new Date(d.time).toLocaleTimeString();
 
       html += `
       <div>
