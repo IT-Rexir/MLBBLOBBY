@@ -222,71 +222,60 @@ const db = firebase.firestore();
 let username = "";
 let currentLobby = "";
 
-/* ================= ONLINE USERS ================= */
-function setOnline(user){
-  db.collection("presence").doc(user).set({
-    name: user,
-    lastActive: Date.now()
-  });
-}
-
-setInterval(()=>{
-  if(username){
-    setOnline(username);
+/* ================= LOAD SAVED USERNAME ================= */
+window.onload = () => {
+  const saved = localStorage.getItem("username");
+  if(saved){
+    username = saved;
+    document.getElementById("nameBox").style.display = "none";
   }
-}, 10000);
+};
 
-function loadOnline(){
-  db.collection("presence").onSnapshot(snap=>{
-    let count = 0;
-    const now = Date.now();
-
-    snap.forEach(d=>{
-      const u = d.data();
-      if(now - u.lastActive < 30000){
-        count++;
-      }
-    });
-
-    document.getElementById("onlineCount").innerText =
-      "Online Users: " + count;
-  });
-}
-loadOnline();
-
-/* ================= USERNAME ================= */
+/* ================= USERNAME (SAVE ON REFRESH) ================= */
 function setName(){
-  const val = document.getElementById("usernameInput").value;
+  const val = document.getElementById("usernameInput").value.trim();
   if(!val) return;
 
   username = val;
-  document.getElementById("nameBox").style.display = "none";
 
-  setOnline(username);
+  // SAVE FOR REFRESH
+  localStorage.setItem("username", username);
+
+  document.getElementById("nameBox").style.display = "none";
 }
 
-/* ================= CREATE LOBBY + 10 MIN EXPIRE ================= */
+/* ================= CREATE LOBBY (FIXED DESC) ================= */
 function createLobby(){
   const now = Date.now();
 
+  const name = document.getElementById("name").value.trim();
+  const desc = document.getElementById("desc").value.trim();
+  const lobbyId = document.getElementById("lobbyId").value.trim();
+  const rank = document.getElementById("rank").value;
+  const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
+
+  if(!name || !lobbyId){
+    alert("Fill Lobby Name and ID");
+    return;
+  }
+
   db.collection("lobbies").add({
-    name: document.getElementById("name").value,
-    desc: document.getElementById("desc").value || "No description",
-    lobbyId: document.getElementById("lobbyId").value || "No ID",
-    rank: document.getElementById("rank").value || "No Rank",
+    name,
+    desc: desc || "No description",
+    lobbyId,
+    rank,
     players: 1,
-    maxPlayers: parseInt(document.getElementById("maxPlayers").value),
+    maxPlayers,
     createdAt: now,
     expiresAt: now + 10 * 60 * 1000
   });
 }
 
-/* ================= LOAD LOBBIES + AUTO REMOVE EXPIRED ================= */
+/* ================= LOAD LOBBIES ================= */
 function loadLobbies(){
   db.collection("lobbies")
   .onSnapshot(snap=>{
     const container = document.getElementById("lobbies");
-    const now = Date.now();
 
     let html = "";
     let count = 0;
@@ -294,15 +283,20 @@ function loadLobbies(){
     snap.forEach(d=>{
       const l = d.data();
 
-      if(l.expiresAt && now > l.expiresAt) return;
+      if(l.expiresAt && Date.now() > l.expiresAt) return;
 
       count++;
 
       html += `
       <div class="lobby">
         <b>${l.name}</b><br>
-        <div style="margin:5px 0;font-size:12px;">${l.desc}</div>
+
+        <div style="margin:5px 0;font-size:12px;">
+          ${l.desc || "No description"}
+        </div>
+
         <div class="rank">🏆 ${l.rank}</div><br>
+
         👥 ${l.maxPlayers}/${l.players}<br>
 
         <div class="id-box" onclick="copyID('${l.lobbyId}')">
@@ -319,20 +313,10 @@ function loadLobbies(){
   });
 }
 
-/* AUTO DELETE EVERY 1 MIN */
-setInterval(()=>{
-  const now = Date.now();
-
-  db.collection("lobbies")
-  .where("expiresAt","<=",now)
-  .get()
-  .then(snap=>{
-    snap.forEach(doc=>{
-      doc.ref.delete();
-    });
-  });
-
-}, 60000);
+/* ================= SCAN ================= */
+function scanLobbies(){
+  loadLobbies();
+}
 
 /* ================= CHAT ================= */
 function copyID(id){
