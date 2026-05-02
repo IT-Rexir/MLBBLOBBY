@@ -178,6 +178,9 @@ button{
 
 <button onclick="createLobby()">Create Lobby</button>
 
+<!-- ✅ NEW BUTTON ADDED -->
+<button onclick="scanLobbies()">🔄 Scan Active Lobbies</button>
+
 <div id="lobbies"></div>
 
 </div>
@@ -224,7 +227,7 @@ function setName(){
   document.getElementById("nameBox").style.display = "none";
 }
 
-/* ===================== FIXED CREATE ===================== */
+/* ================= CREATE LOBBY ================= */
 function createLobby(){
   const now = Date.now();
 
@@ -233,16 +236,17 @@ function createLobby(){
     desc: document.getElementById("desc").value || "No description",
     lobbyId: document.getElementById("lobbyId").value || "No ID",
     rank: document.getElementById("rank").value || "No Rank",
-    players: 5,
+    players: 1,
     maxPlayers: parseInt(document.getElementById("maxPlayers").value),
-
     createdAt: now,
     expiresAt: now + 10 * 60 * 1000
   });
 }
 
-/* ===================== FIXED RENDER ===================== */
+/* ================= LIVE RENDER ================= */
+function loadLobbies(){
 db.collection("lobbies")
+.orderBy("createdAt","desc")
 .onSnapshot(snap=>{
 
   const container = document.getElementById("lobbies");
@@ -253,9 +257,8 @@ db.collection("lobbies")
 
   snap.forEach(d=>{
     const l = d.data();
-    if(!l) return;
 
-    // FIX: expiration safe
+    if(!l) return;
     if(l.expiresAt && now > l.expiresAt) return;
 
     count++;
@@ -286,21 +289,18 @@ db.collection("lobbies")
   document.getElementById("lobbyCount").innerText =
     "Open Lobbies: " + count;
 });
+}
 
-/* ===================== CLEANUP ===================== */
-setInterval(() => {
-  const now = Date.now();
+/* ================= NEW: SCAN BUTTON ================= */
+function scanLobbies(){
+  document.getElementById("lobbies").innerHTML = "Scanning...";
+  loadLobbies();
+}
 
-  db.collection("lobbies")
-  .where("expiresAt","<=",now)
-  .get()
-  .then(snap=>{
-    snap.forEach(doc=>doc.ref.delete());
-  });
+/* start auto load */
+loadLobbies();
 
-}, 60000);
-
-/* ===================== CHAT ===================== */
+/* ================= CHAT ================= */
 function copyID(id){
   navigator.clipboard.writeText(id);
 }
