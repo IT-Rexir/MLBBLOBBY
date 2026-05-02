@@ -222,7 +222,7 @@ const db = firebase.firestore();
 let username = "";
 let currentLobby = "";
 
-/* ================= LOAD SAVED USERNAME ================= */
+/* ================= LOAD SAVED USER ================= */
 window.onload = () => {
   const saved = localStorage.getItem("username");
   if(saved){
@@ -231,20 +231,49 @@ window.onload = () => {
   }
 };
 
-/* ================= USERNAME (SAVE ON REFRESH) ================= */
+/* ================= USERNAME + SAVE ================= */
 function setName(){
   const val = document.getElementById("usernameInput").value.trim();
   if(!val) return;
 
   username = val;
-
-  // SAVE FOR REFRESH
   localStorage.setItem("username", username);
-
   document.getElementById("nameBox").style.display = "none";
+
+  setOnline();
 }
 
-/* ================= CREATE LOBBY (FIXED DESC) ================= */
+/* ================= ONLINE USERS (REAL COUNTER) ================= */
+function setOnline(){
+  if(!username) return;
+
+  db.collection("presence").doc(username).set({
+    name: username,
+    lastActive: Date.now()
+  });
+}
+
+setInterval(setOnline, 10000);
+
+function loadOnline(){
+  db.collection("presence").onSnapshot(snap=>{
+    const now = Date.now();
+    let count = 0;
+
+    snap.forEach(d=>{
+      const u = d.data();
+      if(now - u.lastActive < 30000){
+        count++;
+      }
+    });
+
+    document.getElementById("onlineCount").innerText =
+      "Online Users: " + count;
+  });
+}
+loadOnline();
+
+/* ================= CREATE LOBBY ================= */
 function createLobby(){
   const now = Date.now();
 
@@ -255,7 +284,7 @@ function createLobby(){
   const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
 
   if(!name || !lobbyId){
-    alert("Fill Lobby Name and ID");
+    alert("Fill name and ID");
     return;
   }
 
@@ -290,13 +319,10 @@ function loadLobbies(){
       html += `
       <div class="lobby">
         <b>${l.name}</b><br>
-
         <div style="margin:5px 0;font-size:12px;">
           ${l.desc || "No description"}
         </div>
-
         <div class="rank">🏆 ${l.rank}</div><br>
-
         👥 ${l.maxPlayers}/${l.players}<br>
 
         <div class="id-box" onclick="copyID('${l.lobbyId}')">
@@ -313,10 +339,17 @@ function loadLobbies(){
   });
 }
 
-/* ================= SCAN ================= */
-function scanLobbies(){
-  loadLobbies();
-}
+/* AUTO DELETE */
+setInterval(()=>{
+  const now = Date.now();
+
+  db.collection("lobbies")
+  .where("expiresAt","<=",now)
+  .get()
+  .then(snap=>{
+    snap.forEach(doc=>doc.ref.delete());
+  });
+}, 60000);
 
 /* ================= CHAT ================= */
 function copyID(id){
@@ -372,4 +405,4 @@ loadLobbies();
 </script>
 
 </body>
-</html>
+  </html>
