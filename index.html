@@ -131,6 +131,13 @@ button{
 .chat-input button{
   flex:1;
 }
+
+.scan-btn{
+  width:90%;
+  margin:10px auto;
+  display:block;
+  background:#22c55e;
+}
 </style>
 </head>
 
@@ -178,8 +185,7 @@ button{
 
 <button onclick="createLobby()">Create Lobby</button>
 
-<!-- ✅ NEW BUTTON ADDED -->
-<button onclick="scanLobbies()">🔄 Scan Active Lobbies</button>
+<button class="scan-btn" onclick="scanLobbies()">🔍 Scan Active Lobbies</button>
 
 <div id="lobbies"></div>
 
@@ -219,88 +225,98 @@ const db = firebase.firestore();
 
 let username = "";
 let currentLobby = "";
+let lobbyListener = null;
 
+/* USERNAME */
 function setName(){
   const val = document.getElementById("usernameInput").value;
   if(!val) return;
+
   username = val;
   document.getElementById("nameBox").style.display = "none";
 }
 
-/* ================= CREATE LOBBY ================= */
+/* CREATE LOBBY (FIXED) */
 function createLobby(){
   const now = Date.now();
 
+  const name = document.getElementById("name").value.trim();
+  const desc = document.getElementById("desc").value.trim();
+  const lobbyId = document.getElementById("lobbyId").value.trim();
+  const rank = document.getElementById("rank").value;
+  const maxPlayers = document.getElementById("maxPlayers").value;
+
+  if(!name || !lobbyId){
+    alert("Fill Lobby Name and ID");
+    return;
+  }
+
   db.collection("lobbies").add({
-    name: document.getElementById("name").value,
-    desc: document.getElementById("desc").value || "No description",
-    lobbyId: document.getElementById("lobbyId").value || "No ID",
-    rank: document.getElementById("rank").value || "No Rank",
+    name,
+    desc: desc || "No description",
+    lobbyId,
+    rank,
     players: 1,
-    maxPlayers: parseInt(document.getElementById("maxPlayers").value),
-    createdAt: now,
-    expiresAt: now + 10 * 60 * 1000
+    maxPlayers: parseInt(maxPlayers),
+    createdAt: now
   });
 }
 
-/* ================= LIVE RENDER ================= */
+/* SCAN FIXED */
 function loadLobbies(){
-db.collection("lobbies")
-.orderBy("createdAt","desc")
-.onSnapshot(snap=>{
 
-  const container = document.getElementById("lobbies");
-  const now = Date.now();
+  if(lobbyListener){
+    lobbyListener(); // remove old listener
+  }
 
-  let html = "";
-  let count = 0;
+  lobbyListener = db.collection("lobbies")
+  .orderBy("createdAt","desc")
+  .onSnapshot(snap=>{
 
-  snap.forEach(d=>{
-    const l = d.data();
+    const container = document.getElementById("lobbies");
 
-    if(!l) return;
-    if(l.expiresAt && now > l.expiresAt) return;
+    let html = "";
+    let count = 0;
 
-    count++;
+    snap.forEach(d=>{
+      const l = d.data();
+      if(!l) return;
 
-    html += `
-    <div class="lobby">
+      count++;
 
-      <b>${l.name}</b><br>
+      html += `
+      <div class="lobby">
 
-      <div style="margin:5px 0;font-size:12px;">
-        ${l.desc}
-      </div>
+        <b>${l.name}</b><br>
 
-      <div class="rank">🏆 ${l.rank}</div><br>
+        <div style="margin:5px 0;font-size:12px;">
+          ${l.desc}
+        </div>
 
-      👥 ${l.maxPlayers}/${l.players}<br>
+        <div class="rank">🏆 ${l.rank}</div><br>
 
-      <div class="id-box" onclick="copyID('${l.lobbyId}')">
-        🆔 ${l.lobbyId}
-      </div><br>
+        👥 ${l.maxPlayers}/${l.players}<br>
 
-      <button onclick="openChat('${d.id}')">Chat</button>
+        <div class="id-box" onclick="copyID('${l.lobbyId}')">
+          🆔 ${l.lobbyId}
+        </div><br>
 
-    </div>`;
+        <button onclick="openChat('${d.id}')">Chat</button>
+
+      </div>`;
+    });
+
+    container.innerHTML = html;
+    document.getElementById("lobbyCount").innerText =
+      "Open Lobbies: " + count;
   });
-
-  container.innerHTML = html;
-  document.getElementById("lobbyCount").innerText =
-    "Open Lobbies: " + count;
-});
 }
 
-/* ================= NEW: SCAN BUTTON ================= */
 function scanLobbies(){
-  document.getElementById("lobbies").innerHTML = "Scanning...";
   loadLobbies();
 }
 
-/* start auto load */
-loadLobbies();
-
-/* ================= CHAT ================= */
+/* CHAT FIXED */
 function copyID(id){
   navigator.clipboard.writeText(id);
 }
@@ -316,7 +332,13 @@ function openChat(id){
 
     snap.forEach(m=>{
       const d = m.data();
-      const time = new Date(d.time).toLocaleTimeString();
+
+      const time = d.time
+        ? new Date(d.time).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        : "";
 
       html += `
       <div>
@@ -348,9 +370,7 @@ function sendMsg(){
   });
 }
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
+loadLobbies();
 </script>
 
 </body>
