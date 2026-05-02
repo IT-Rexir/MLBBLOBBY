@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lobby Finder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- PWA ADDITIONS -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<style>
+body{
+  margin:0;
+  font-family:Segoe UI;
+  background:#0b0f1a;
+  color:white;
+}
+
+.header{
+  padding:15px;
+  text-align:center;
+  background:linear-gradient(90deg,#0ea5e9,#9333ea);
+  font-weight:bold;
+}
+
+.container{
+  max-width:500px;
+  margin:auto;
+  padding:10px;
+}
+
+.card{
+  background:#141a2b;
+  padding:10px;
+  border-radius:12px;
+  margin-bottom:10px;
+}
+
+input,textarea,select{
+  width:90%;
+  padding:10px;
+  margin:5px 0;
+  border-radius:8px;
+  border:none;
+  background:#0b0f1a;
+  color:white;
+}
+
+button{
+  width:100%;
+  padding:10px;
+  border:none;
+  border-radius:8px;
+  background:linear-gradient(90deg,#0ea5e9,#9333ea);
+  color:white;
+  font-weight:bold;
+}
+
+#nameBox{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.9);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+
+.name-card{
+  width:60%;
+  max-width:300px;
+  background:#141a2b;
+  padding:15px;
+  border-radius:12px;
+  text-align:center;
+}
+
+.lobby{
+  background:#101726;
+  padding:10px;
+  border-radius:12px;
+  margin-top:10px;
+}
+
+.rank{
+  background:#9333ea;
+  display:inline-block;
+  padding:3px 8px;
+  border-radius:8px;
+  font-size:12px;
+  margin-top:5px;
+}
+
+.id-box{
+  margin-top:5px;
+  display:inline-block;
+  padding:5px 8px;
+  border-radius:8px;
+  background:#0b0f1a;
+  border:1px solid #9333ea;
+  font-size:12px;
+  cursor:pointer;
+}
+
+.chat-panel{
+  display:none;
+  position:fixed;
+  bottom:0;
+  left:0;
+  width:100%;
+  height:45%;
+  background:#0b0f1a;
+  border-top:2px solid #9333ea;
+  flex-direction:column;
+  z-index:999;
+}
+
+.chat-header{
+  padding:10px;
+  background:#141a2b;
+  display:flex;
+  justify-content:space-between;
+}
+
+.chat-box{
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+  font-size:13px;
+  text-align:left;
+  direction:ltr;
+}
+
+.chat-input{
+  display:flex;
+  gap:5px;
+  padding:10px;
+  background:#141a2b;
+}
+
+.chat-input input{
+  flex:3;
+}
+
+.chat-input button{
+  flex:1;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+ Lobby Finder
+<br>
+<small id="lobbyCount">Open Lobbies: 0</small>
+</div>
+
+<div id="nameBox">
+  <div class="name-card">
+    <h3>Enter Your Username</h3>
+    <input id="usernameInput" placeholder="Your name">
+    <button onclick="setName()">Continue</button>
+  </div>
+</div>
+
+<div class="container">
+
+<h3>Create Lobby</h3>
+
+<input id="name" placeholder="Lobby Name">
+<textarea id="desc" placeholder="Description"></textarea>
+<input type="number" id="lobbyId" placeholder="Lobby ID">
+
+<select id="rank">
+  <option>Warrior–Elite</option>
+  <option>Elite–Master</option>
+  <option>Master–Grandmaster</option>
+  <option>Grandmaster–Epic</option>
+  <option>Epic–Legend</option>
+  <option>Legend–Mythic</option>
+  <option>Mythic–Glory</option>
+</select>
+
+<select id="maxPlayers">
+  
+  <option value="5">5 Players Available</option>
+  <option value="4">4 Players Available</option>
+  <option value="3">3 Players Available</option>
+  <option value="2">2 Players Available</option>
+  <option value="1">1 Players Available</option>
+</select>
+
+<button onclick="createLobby()">Create Lobby</button>
+
+<div id="lobbies"></div>
+
+</div>
+
+<div class="chat-panel" id="chatPanel">
+
+  <div class="chat-header">
+    <span>💬 Lobby Chat</span>
+    <button onclick="closeChat()">X</button>
+  </div>
+
+  <div class="chat-box" id="chatBox"></div>
+
+  <div class="chat-input">
+    <input id="chatMsg" placeholder="Type message...">
+    <button onclick="sendMsg()">Send</button>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDPuUBqDi3t68v9HKnfF512RPNB0Bg38Vs",
+  authDomain: "messageapp-b2d5a.firebaseapp.com",
+  projectId: "messageapp-b2d5a",
+  storageBucket: "messageapp-b2d5a.firebasestorage.app",
+  messagingSenderId: "446587723082",
+  appId: "1:446587723082:android:89814fa91f7fa2ed0ef5b3"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let username = "";
+let currentLobby = "";
+
+function setName(){
+  const val = document.getElementById("usernameInput").value;
+  if(!val) return;
+
+  username = val;
+  document.getElementById("nameBox").style.display = "none";
+}
+
+function createLobby(){
+  db.collection("lobbies").add({
+    name: document.getElementById("name").value,
+    desc: document.getElementById("desc").value || "No description",
+    lobbyId: document.getElementById("lobbyId").value || "No ID",
+    rank: document.getElementById("rank").value || "No Rank",
+    players: 5,
+    maxPlayers: parseInt(document.getElementById("maxPlayers").value),
+    createdAt: Date.now()
+  });
+}
+
+db.collection("lobbies").orderBy("createdAt","desc")
+.onSnapshot(snap=>{
+
+  document.getElementById("lobbyCount").innerText =
+    "Open Lobbies: " + snap.size;
+
+  let html = "";
+
+  snap.forEach(d=>{
+    const l = d.data();
+
+    html += `
+    <div class="lobby">
+
+      <b>${l.name}</b><br>
+
+      <div style="margin:5px 0;font-size:12px;">
+        ${l.desc}
+      </div>
+
+      <div class="rank">🏆 ${l.rank}</div><br>
+
+      👥 ${l.players}/${l.maxPlayers}<br>
+
+      <div class="id-box" onclick="copyID('${l.lobbyId}')">
+        🆔 ${l.lobbyId} (tap to copy)
+      </div><br>
+
+      <button onclick="openChat('${d.id}')">Chat</button>
+
+    </div>`;
+  });
+
+  lobbies.innerHTML = html;
+});
+
+function copyID(id){
+  navigator.clipboard.writeText(id);
+}
+
+function openChat(id){
+  currentLobby = id;
+  document.getElementById("chatPanel").style.display = "flex";
+
+  db.collection("lobbies").doc(id).collection("chat")
+  .orderBy("time")
+  .onSnapshot(snap=>{
+    let html = "";
+
+    snap.forEach(m=>{
+      const d = m.data();
+      const time = new Date(d.time).toLocaleTimeString([],{
+        hour:'2-digit',minute:'2-digit'
+      });
+
+      html += `
+      <div>
+        <b style="color:#0ea5e9">${d.user}</b>
+        <small> • ${time}</small><br>
+        ${d.msg}
+      </div>`;
+    });
+
+    document.getElementById("chatBox").innerHTML = html;
+  });
+}
+
+function closeChat(){
+  document.getElementById("chatPanel").style.display = "none";
+}
+
+function sendMsg(){
+  const msg = document.getElementById("chatMsg").value;
+  if(!msg) return;
+
+  document.getElementById("chatMsg").value = "";
+
+  db.collection("lobbies").doc(currentLobby)
+  .collection("chat").add({
+    user: username,
+    msg,
+    time: Date.now()
+  });
+}
+
+/* PWA SERVICE WORKER */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+
+</body>
+</html>
