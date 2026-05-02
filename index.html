@@ -5,7 +5,6 @@
 <title>Lobby Finder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- PWA ADDITIONS -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b0f1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -29,13 +28,6 @@ body{
   max-width:500px;
   margin:auto;
   padding:10px;
-}
-
-.card{
-  background:#141a2b;
-  padding:10px;
-  border-radius:12px;
-  margin-bottom:10px;
 }
 
 input,textarea,select{
@@ -69,15 +61,6 @@ button{
   justify-content:center;
   align-items:center;
   z-index:9999;
-}
-
-.name-card{
-  width:60%;
-  max-width:300px;
-  background:#141a2b;
-  padding:15px;
-  border-radius:12px;
-  text-align:center;
 }
 
 .lobby{
@@ -132,8 +115,6 @@ button{
   overflow-y:auto;
   padding:10px;
   font-size:13px;
-  text-align:left;
-  direction:ltr;
 }
 
 .chat-input{
@@ -162,7 +143,7 @@ button{
 </div>
 
 <div id="nameBox">
-  <div class="name-card">
+  <div>
     <h3>Enter Your Username</h3>
     <input id="usernameInput" placeholder="Your name">
     <button onclick="setName()">Continue</button>
@@ -188,7 +169,6 @@ button{
 </select>
 
 <select id="maxPlayers">
-  
   <option value="5">5 Players Available</option>
   <option value="4">4 Players Available</option>
   <option value="3">3 Players Available</option>
@@ -245,6 +225,9 @@ function setName(){
   document.getElementById("nameBox").style.display = "none";
 }
 
+/* =========================
+   CREATE LOBBY (10 MIN EXPIRE)
+========================= */
 function createLobby(){
   db.collection("lobbies").add({
     name: document.getElementById("name").value,
@@ -253,20 +236,32 @@ function createLobby(){
     rank: document.getElementById("rank").value || "No Rank",
     players: 5,
     maxPlayers: parseInt(document.getElementById("maxPlayers").value),
-    createdAt: Date.now()
+
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 10 * 60 * 1000 // ✅ 10 minutes
   });
 }
 
-db.collection("lobbies").orderBy("createdAt","desc")
+/* =========================
+   RENDER LOBBIES (FIXED)
+========================= */
+db.collection("lobbies")
+.orderBy("createdAt","desc")
 .onSnapshot(snap=>{
 
-  document.getElementById("lobbyCount").innerText =
-    "Open Lobbies: " + snap.size;
+  const container = document.getElementById("lobbies");
+  const now = Date.now();
 
   let html = "";
+  let count = 0;
 
   snap.forEach(d=>{
     const l = d.data();
+
+    // skip expired
+    if(l.expiresAt && l.expiresAt < now) return;
+
+    count++;
 
     html += `
     <div class="lobby">
@@ -279,7 +274,7 @@ db.collection("lobbies").orderBy("createdAt","desc")
 
       <div class="rank">🏆 ${l.rank}</div><br>
 
-      👥 ${l.players}/${l.maxPlayers}<br>
+      👥 ${l.maxPlayers}/${l.players}<br>
 
       <div class="id-box" onclick="copyID('${l.lobbyId}')">
         🆔 ${l.lobbyId} (tap to copy)
@@ -290,9 +285,32 @@ db.collection("lobbies").orderBy("createdAt","desc")
     </div>`;
   });
 
-  lobbies.innerHTML = html;
+  container.innerHTML = html;
+  document.getElementById("lobbyCount").innerText =
+    "Open Lobbies: " + count;
 });
 
+/* =========================
+   AUTO DELETE EXPIRED LOBBIES
+========================= */
+function cleanupLobbies(){
+  const now = Date.now();
+
+  db.collection("lobbies")
+  .where("expiresAt","<=",now)
+  .get()
+  .then(snap=>{
+    snap.forEach(doc=>{
+      doc.ref.delete();
+    });
+  });
+}
+
+setInterval(cleanupLobbies, 60000);
+
+/* =========================
+   CHAT SYSTEM (UNCHANGED)
+========================= */
 function copyID(id){
   navigator.clipboard.writeText(id);
 }
@@ -342,7 +360,6 @@ function sendMsg(){
   });
 }
 
-/* PWA SERVICE WORKER */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
 }
