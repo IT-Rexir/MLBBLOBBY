@@ -227,37 +227,29 @@ let username = "";
 let currentLobby = "";
 let lobbyListener = null;
 
-/* USERNAME */
+/* USER */
 function setName(){
   const val = document.getElementById("usernameInput").value;
   if(!val) return;
-
   username = val;
   document.getElementById("nameBox").style.display = "none";
 }
 
-/* CREATE LOBBY (FIXED) */
+/* CREATE LOBBY + 10 MIN EXPIRY */
 function createLobby(){
 
-  const nameEl = document.getElementById("name");
-  const descEl = document.getElementById("desc");
-  const idEl = document.getElementById("lobbyId");
-  const rankEl = document.getElementById("rank");
-  const maxEl = document.getElementById("maxPlayers");
-
-  const name = nameEl ? nameEl.value.trim() : "";
-  const desc = descEl ? descEl.value.trim() : "";
-  const lobbyId = idEl ? idEl.value.trim() : "";
-  const rank = rankEl ? rankEl.value : "";
-  const maxPlayers = maxEl ? maxEl.value : "";
-
-  // 🔥 DEBUG ALERT (IMPORTANT)
-  console.log("CREATE LOBBY:", { name, desc, lobbyId, rank, maxPlayers });
+  const name = document.getElementById("name").value.trim();
+  const desc = document.getElementById("desc").value.trim();
+  const lobbyId = document.getElementById("lobbyId").value.trim();
+  const rank = document.getElementById("rank").value;
+  const maxPlayers = document.getElementById("maxPlayers").value;
 
   if(!name || !lobbyId){
-    alert("❌ Fill Lobby Name and Lobby ID first");
+    alert("Fill Lobby Name and ID");
     return;
   }
+
+  const now = Date.now();
 
   db.collection("lobbies").add({
     name,
@@ -265,22 +257,18 @@ function createLobby(){
     lobbyId,
     rank,
     maxPlayers,
-    players: 5,
-    createdAt: Date.now()
-  })
-  .then(()=>{
-    alert("✅ Lobby Created!");
-  })
-  .catch(err=>{
-    alert("❌ Error: " + err.message);
+    players: 1,
+    createdAt: now,
+    expiresAt: now + 10 * 60 * 1000   // ✅ 10 MINUTES
   });
+
 }
 
-/* SCAN FIXED */
+/* LOAD + FILTER EXPIRED */
 function loadLobbies(){
 
   if(lobbyListener){
-    lobbyListener(); // remove old listener
+    lobbyListener();
   }
 
   lobbyListener = db.collection("lobbies")
@@ -288,13 +276,16 @@ function loadLobbies(){
   .onSnapshot(snap=>{
 
     const container = document.getElementById("lobbies");
+    const now = Date.now();
 
     let html = "";
     let count = 0;
 
-    snap.forEach(d=>{
-      const l = d.data();
-      if(!l) return;
+    snap.forEach(doc=>{
+      const l = doc.data();
+
+      // ❌ HIDE EXPIRED
+      if(l.expiresAt && l.expiresAt < now) return;
 
       count++;
 
@@ -315,7 +306,7 @@ function loadLobbies(){
           🆔 ${l.lobbyId}
         </div><br>
 
-        <button onclick="openChat('${d.id}')">Chat</button>
+        <button onclick="openChat('${doc.id}')">Chat</button>
 
       </div>`;
     });
@@ -326,11 +317,26 @@ function loadLobbies(){
   });
 }
 
+/* AUTO DELETE EXPIRED */
+setInterval(()=>{
+  const now = Date.now();
+
+  db.collection("lobbies")
+  .where("expiresAt","<=",now)
+  .get()
+  .then(snap=>{
+    snap.forEach(doc=>{
+      doc.ref.delete();
+    });
+  });
+}, 60000);
+
+/* SCAN */
 function scanLobbies(){
   loadLobbies();
 }
 
-/* CHAT FIXED */
+/* CHAT */
 function copyID(id){
   navigator.clipboard.writeText(id);
 }
@@ -347,12 +353,10 @@ function openChat(id){
     snap.forEach(m=>{
       const d = m.data();
 
-      const time = d.time
-        ? new Date(d.time).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit"
-          })
-        : "";
+      const time = new Date(d.time).toLocaleTimeString([],{
+        hour:"2-digit",
+        minute:"2-digit"
+      });
 
       html += `
       <div>
